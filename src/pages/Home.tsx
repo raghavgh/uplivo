@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Category } from '../db/db';
-import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 
 const POSITIVE_MESSAGES = [
