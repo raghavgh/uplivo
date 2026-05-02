@@ -22,6 +22,7 @@ function getRandomMessage(type: 'credit' | 'debit') {
 
 export function Home() {
   const [message, setMessage] = useState<{text: string, type: 'credit' | 'debit'} | null>(null);
+  const [multiplier, setMultiplier] = useState<number>(1);
 
   const categories = useLiveQuery(() => db.categories.filter(c => c.isActive).toArray());
   const transactions = useLiveQuery(() => db.transactions.orderBy('createdAt').reverse().toArray());
@@ -33,21 +34,24 @@ export function Home() {
 
   const handleAction = async (category: Category) => {
     const isCredit = category.type === 'credit';
-    const newBalance = isCredit ? currentBalance + category.amount : currentBalance - category.amount;
+    const totalAmount = category.amount * multiplier;
+    const newBalance = isCredit ? currentBalance + totalAmount : currentBalance - totalAmount;
     const msgText = getRandomMessage(category.type);
+    const actionName = multiplier > 1 ? `${category.name} (x${multiplier})` : category.name;
 
     await db.transactions.add({
       id: crypto.randomUUID(),
       categoryId: category.id,
-      categoryNameSnapshot: category.name,
+      categoryNameSnapshot: actionName,
       type: category.type,
-      amount: category.amount,
+      amount: totalAmount,
       balanceAfter: newBalance,
       createdAt: Date.now(),
       messageShown: msgText
     });
 
     setMessage({ text: msgText, type: category.type });
+    setMultiplier(1); // Reset after action
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -74,6 +78,33 @@ export function Home() {
 
       {/* Action Buttons */}
       <div className="space-y-6">
+        {/* Multiplier Input */}
+        <div className="flex items-center justify-between px-1 mb-2 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+          <span className="text-sm font-semibold text-gray-600">Times Performed:</span>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0 rounded-full" 
+              onClick={() => setMultiplier(m => Math.max(1, m - 1))}
+            >-</Button>
+            <input 
+              type="number" 
+              min="1" 
+              max="99"
+              value={multiplier} 
+              onChange={(e) => setMultiplier(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-12 text-center font-bold text-gray-900 focus:outline-none"
+            />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-8 w-8 p-0 rounded-full" 
+              onClick={() => setMultiplier(m => m + 1)}
+            >+</Button>
+          </div>
+        </div>
+
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Good Actions</h2>
           <div className="grid grid-cols-2 gap-3">
@@ -85,7 +116,7 @@ export function Home() {
                 onClick={() => handleAction(cat)}
               >
                 <span className="truncate mr-2 font-medium">{cat.name}</span>
-                <span className="text-green-600 font-bold">+{cat.amount}</span>
+                <span className="text-green-600 font-bold">+{cat.amount * multiplier}</span>
               </Button>
             ))}
           </div>
@@ -102,7 +133,7 @@ export function Home() {
                 onClick={() => handleAction(cat)}
               >
                 <span className="truncate mr-2 font-medium">{cat.name}</span>
-                <span className="text-gray-500 font-bold group-hover:text-red-500">-{cat.amount}</span>
+                <span className="text-gray-500 font-bold group-hover:text-red-500">-{cat.amount * multiplier}</span>
               </Button>
             ))}
           </div>
