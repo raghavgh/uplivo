@@ -22,7 +22,7 @@ function getRandomMessage(type: 'credit' | 'debit') {
 
 export function Home() {
   const [message, setMessage] = useState<{text: string, type: 'credit' | 'debit'} | null>(null);
-  const [multiplier, setMultiplier] = useState<number>(1);
+  const [multipliers, setMultipliers] = useState<Record<string, string>>({});
 
   const categories = useLiveQuery(() => db.categories.filter(c => c.isActive).toArray());
   const transactions = useLiveQuery(() => db.transactions.orderBy('createdAt').reverse().toArray());
@@ -32,12 +32,22 @@ export function Home() {
   const credits = categories?.filter(c => c.type === 'credit') || [];
   const debits = categories?.filter(c => c.type === 'debit') || [];
 
+  const getMultiplier = (id: string) => {
+    const val = multipliers[id];
+    return val ? Math.max(1, parseInt(val) || 1) : 1;
+  };
+
+  const handleMultiplierChange = (id: string, value: string) => {
+    setMultipliers(prev => ({ ...prev, [id]: value }));
+  };
+
   const handleAction = async (category: Category) => {
+    const m = getMultiplier(category.id);
     const isCredit = category.type === 'credit';
-    const totalAmount = category.amount * multiplier;
+    const totalAmount = category.amount * m;
     const newBalance = isCredit ? currentBalance + totalAmount : currentBalance - totalAmount;
     const msgText = getRandomMessage(category.type);
-    const actionName = multiplier > 1 ? `${category.name} (x${multiplier})` : category.name;
+    const actionName = m > 1 ? `${category.name} (x${m})` : category.name;
 
     await db.transactions.add({
       id: crypto.randomUUID(),
@@ -51,7 +61,11 @@ export function Home() {
     });
 
     setMessage({ text: msgText, type: category.type });
-    setMultiplier(1); // Reset after action
+    setMultipliers(prev => {
+      const next = { ...prev };
+      delete next[category.id];
+      return next;
+    });
     setTimeout(() => setMessage(null), 3000);
   };
 
@@ -78,64 +92,61 @@ export function Home() {
 
       {/* Action Buttons */}
       <div className="space-y-6">
-        {/* Multiplier Input */}
-        <div className="flex items-center justify-between px-1 mb-2 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-          <span className="text-sm font-semibold text-gray-600">Times Performed:</span>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-8 w-8 p-0 rounded-full" 
-              onClick={() => setMultiplier(m => Math.max(1, m - 1))}
-            >-</Button>
-            <input 
-              type="number" 
-              min="1" 
-              max="99"
-              value={multiplier} 
-              onChange={(e) => setMultiplier(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-12 text-center font-bold text-gray-900 focus:outline-none"
-            />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-8 w-8 p-0 rounded-full" 
-              onClick={() => setMultiplier(m => m + 1)}
-            >+</Button>
-          </div>
-        </div>
-
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Good Actions</h2>
           <div className="grid grid-cols-2 gap-3">
-            {credits.map(cat => (
-              <Button 
-                key={cat.id} 
-                variant="secondary"
-                className="h-auto py-3 px-4 justify-between bg-green-50 border border-green-100 hover:bg-green-100"
-                onClick={() => handleAction(cat)}
-              >
-                <span className="truncate mr-2 font-medium">{cat.name}</span>
-                <span className="text-green-600 font-bold">+{cat.amount * multiplier}</span>
-              </Button>
-            ))}
+            {credits.map(cat => {
+              const m = getMultiplier(cat.id);
+              const mString = multipliers[cat.id] ?? '';
+              return (
+                <div key={cat.id} className="flex bg-green-50 border border-green-100 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-green-500">
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={mString}
+                    onChange={(e) => handleMultiplierChange(cat.id, e.target.value)}
+                    placeholder="1"
+                    className="w-10 text-center bg-white/60 border-r border-green-100 font-semibold text-sm text-gray-700 outline-none"
+                  />
+                  <button 
+                    className="flex-1 py-3 px-2 flex justify-between items-center hover:bg-green-100 transition-colors active:bg-green-200"
+                    onClick={() => handleAction(cat)}
+                  >
+                    <span className="truncate mr-1 font-medium text-sm text-gray-900">{cat.name}</span>
+                    <span className="text-green-600 font-bold text-sm">+{cat.amount * m}</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">Bad Actions</h2>
           <div className="grid grid-cols-2 gap-3">
-            {debits.map(cat => (
-              <Button 
-                key={cat.id} 
-                variant="outline"
-                className="h-auto py-3 px-4 justify-between border-gray-200 hover:bg-red-50 hover:border-red-100 hover:text-red-700"
-                onClick={() => handleAction(cat)}
-              >
-                <span className="truncate mr-2 font-medium">{cat.name}</span>
-                <span className="text-gray-500 font-bold group-hover:text-red-500">-{cat.amount * multiplier}</span>
-              </Button>
-            ))}
+            {debits.map(cat => {
+              const m = getMultiplier(cat.id);
+              const mString = multipliers[cat.id] ?? '';
+              return (
+                <div key={cat.id} className="flex border border-gray-200 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-red-500 group">
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={mString}
+                    onChange={(e) => handleMultiplierChange(cat.id, e.target.value)}
+                    placeholder="1"
+                    className="w-10 text-center bg-gray-50 border-r border-gray-200 font-semibold text-sm text-gray-700 outline-none group-hover:bg-red-50 group-hover:border-red-100 transition-colors"
+                  />
+                  <button 
+                    className="flex-1 py-3 px-2 flex justify-between items-center hover:bg-red-50 transition-colors active:bg-red-100"
+                    onClick={() => handleAction(cat)}
+                  >
+                    <span className="truncate mr-1 font-medium text-sm text-gray-900">{cat.name}</span>
+                    <span className="text-gray-500 font-bold text-sm group-hover:text-red-500 transition-colors">-{cat.amount * m}</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
